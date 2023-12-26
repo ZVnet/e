@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZV-EA3 1.0</title>
+    <link href="https://fonts.googleapis.com/css2?family=Rethink+Sans&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Rethink+Sans:wght@700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #000;
+            position: relative;
+            font-family: 'Rethink Sans', monospace;
+        }
+
+        body::before {
+            content: "";
+            padding-top: 56.25%;
+            /* 16:9 aspect ratio (9 / 16 * 100) */
+            display: block;
+        }
+
+        #audioPlayer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #000;
+            border: none;
+            z-index: -1; /* Pushing the audio player to the back */
+        }
+
+        #visualizer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: transparent;
+            z-index: 1; /* Bring the visualizer to the front */
+        }
+
+        #infoShade {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(to bottom, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0) 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            align-items: center;
+            color: #fff;
+            font-size: 2em;
+            text-align: center;
+            opacity: 0;
+            transition: opacity 1s ease-in-out;
+        }
+
+        #title {
+            font-size: 2.5em;
+            font-weight: 700;
+        }
+
+        #id {
+            margin-top: 10%;
+        }
+    </style>
+</head>
+
+<body>
+    <audio id="audioPlayer" controls>
+        Your browser does not support the audio tag.
+    </audio>
+
+    <!-- Visualizer overlay -->
+    <div id="visualizer">
+        <!-- Add your audio visualizer here -->
+        <!-- You can use libraries like p5.js for audio visualization -->
+    </div>
+
+    <!-- Info-shade overlay -->
+    <div id="infoShade">
+        <div id="id"></div>
+        <div id="title"></div>
+    </div>
+
+    <script>
+        document.addEventListener("DOMContentLoaded", function () {
+            const urlParams = new URLSearchParams(window.location.search);
+            const audioUrl = urlParams.get('audio');
+            const loopParam = urlParams.get('loop');
+
+            // Display info-shade overlay
+            displayInfoShade(urlParams);
+
+            if (audioUrl) {
+                if (audioUrl.endsWith('.m3u8')) {
+                    playHLSStream(audioUrl);
+                } else {
+                    const audioPlayer = document.getElementById('audioPlayer');
+                    audioPlayer.src = audioUrl;
+
+                    // Check the loop parameter
+                    if (loopParam !== null) {
+                        const loopValue = parseInt(loopParam, 10);
+                        audioPlayer.loop = loopValue === 1;
+                    }
+
+                    audioPlayer.addEventListener('loadedmetadata', function () {
+                        audioPlayer.play();
+                    });
+                }
+            }
+        });
+
+        function displayInfoShade(urlParams) {
+            const infoShade = document.getElementById('infoShade');
+            const title = document.getElementById('title');
+            const id = document.getElementById('id');
+
+            const name = urlParams.get('name') || 'No info available';
+            const channelId = urlParams.get('id') || 'No info available';
+
+            title.innerText = `${decodeURIComponent(name)}`;
+            id.innerText = `${channelId}`;
+
+            infoShade.style.opacity = 1;
+
+            // Hide the info-shade after 7 seconds
+            setTimeout(() => {
+                infoShade.style.opacity = 0;
+            }, 7000);
+        }
+
+        function playHLSStream(url) {
+            const audioPlayer = document.getElementById('audioPlayer');
+
+            if (Hls.isSupported()) {
+                const hls = new Hls();
+                hls.loadSource(url);
+                hls.attachMedia(audioPlayer);
+                hls.on(Hls.Events.MANIFEST_PARSED, function () {
+                    audioPlayer.play();
+                });
+            } else if (audioPlayer.canPlayType('application/vnd.apple.mpegurl')) {
+                audioPlayer.src = url;
+                audioPlayer.addEventListener('loadedmetadata', function () {
+                    audioPlayer.play();
+                });
+            }
+        }
+    </script>
+</body>
+
+</html>
