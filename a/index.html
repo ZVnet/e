@@ -1,189 +1,91 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ZV-A 1.2</title>
-    <link href="https://fonts.googleapis.com/css2?family=Rethink+Sans&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Rethink+Sans:wght@700&display=swap" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-    <style>
-        body {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            background-color: #000;
-            position: relative;
-            font-family: 'Rethink Sans', monospace;
-        }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ZM 1.0</title>
+  <style>
+body {
+  margin: 0;
+  background-color: black;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+}
 
-        body::before {
-            content: "";
-            padding-top: 56.25%; /* 16:9 aspect ratio (9 / 16 * 100) */
-            display: block;
-        }
+.audio-container {
+  position: relative;
+}
 
-        audio {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: #000;
-            border: none;
-        }
+#audioVisualizer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
 
-        #infoShade {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(to bottom, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0) 100%);
-            display: flex;
-            flex-direction: column;
-            justify-content: flex-start;
-            align-items: center;
-            color: #fff;
-            font-size: 2em;
-            text-align: center;
-            opacity: 0;
-            transition: opacity 1s ease-in-out;
-        }
-        #title {
-            font-size: 2.5em;
-            font-weight: 700;
-        }
-        #id {
-            margin-top: 10%;
-        }
-    </style>
+  </style>
 </head>
 <body>
-    <audio id="audioPlayer" controls autoplay>
-        Your browser does not support the audio tag.
-    </audio>
+  <div class="audio-container">
+    <audio id="radioPlayer" controls autoplay></audio>
+    <canvas id="audioVisualizer"></canvas>
+  </div>
 
-    <!-- Info-shade overlay -->
-    <div id="infoShade">
-        <div id="id"></div>
-        <div id="title"></div>
-    </div>
+  <script>
+      document.addEventListener('DOMContentLoaded', function () {
+  const audioPlayer = document.getElementById('radioPlayer');
+  const audioVisualizer = document.getElementById('audioVisualizer');
+  const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  const analyser = audioContext.createAnalyser();
+  const source = audioContext.createMediaElementSource(audioPlayer);
 
-    <script>
-        document.addEventListener("DOMContentLoaded", function () {
-            const urlParams = new URLSearchParams(window.location.search);
-            const audioUrl = urlParams.get('audio');
-            const loopParam = urlParams.get('loop');
+  source.connect(analyser);
+  analyser.connect(audioContext.destination);
 
-            // Display info-shade overlay
-            displayInfoShade(urlParams);
-            
-            if (audioUrl) {
-                if (audioUrl.endsWith('.m3u8')) {
-                    playHLSStream(audioUrl);
-                } else {
-                    const audioPlayer = document.getElementById('audioPlayer');
-                    audioPlayer.src = audioUrl;
+  analyser.fftSize = 256;
+  const bufferLength = analyser.frequencyBinCount;
+  const dataArray = new Uint8Array(bufferLength);
 
-                    // Check the loop parameter
-                    if (loopParam !== null) {
-                        const loopValue = parseInt(loopParam, 10);
-                        audioPlayer.loop = loopValue === 1;
-                    }
+  const canvasCtx = audioVisualizer.getContext('2d');
+  canvasCtx.fillStyle = 'rgb(255, 255, 255)';
+  canvasCtx.fillRect(0, 0, audioVisualizer.width, audioVisualizer.height);
 
-                    audioPlayer.addEventListener('loadedmetadata', function () {
-                        audioPlayer.play();
-                        createAudioVisualizer(audioPlayer);
-                    });
-                }
-            }
-        });
+  function visualize() {
+    analyser.getByteFrequencyData(dataArray);
 
-        function displayInfoShade(urlParams) {
-            const infoShade = document.getElementById('infoShade');
-            const title = document.getElementById('title');
-            const id = document.getElementById('id');
+    canvasCtx.clearRect(0, 0, audioVisualizer.width, audioVisualizer.height);
 
-            const name = urlParams.get('name') || 'No info available';
-            const channelId = urlParams.get('id') || 'No info available';
+    const barWidth = (audioVisualizer.width / bufferLength) * 2.5;
+    let barHeight;
+    let x = 0;
 
-            title.innerText = `${decodeURIComponent(name)}`;
-            id.innerText = `${channelId}`;
+    for (let i = 0; i < bufferLength; i++) {
+      barHeight = dataArray[i] / 2;
 
-            infoShade.style.opacity = 1;
+      canvasCtx.fillStyle = `rgb(${barHeight + 100}, 50, 50)`;
+      canvasCtx.fillRect(x, audioVisualizer.height - barHeight, barWidth, barHeight);
 
-            // Hide the info-shade after 7 seconds
-            setTimeout(() => {
-                infoShade.style.opacity = 0;
-            }, 7000);
-        }
+      x += barWidth + 1;
+    }
 
-        function playHLSStream(url) {
-            const audioPlayer = document.getElementById('audioPlayer');
+    requestAnimationFrame(visualize);
+  }
 
-            if (Hls.isSupported()) {
-                const hls = new Hls();
-                hls.loadSource(url);
-                hls.attachMedia(audioPlayer);
-                hls.on(Hls.Events.MANIFEST_PARSED, function () {
-                    createAudioVisualizer(audioPlayer);
-                    audioPlayer.play();
-                });
-            } else if (audioPlayer.canPlayType('application/vnd.apple.mpegurl')) {
-                audioPlayer.src = url;
-                audioPlayer.addEventListener('loadedmetadata', function () {
-                    createAudioVisualizer(audioPlayer);
-                    audioPlayer.play();
-                });
-            }
-        }
+  visualize();
 
-        function createAudioVisualizer(audioElement) {
-            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            const analyser = audioContext.createAnalyser();
-            const source = audioContext.createMediaElementSource(audioElement);
+  const urlParams = new URLSearchParams(window.location.search);
+  const sourceUrl = urlParams.get('src');
 
-            source.connect(analyser);
-            analyser.connect(audioContext.destination);
+  if (sourceUrl) {
+    audioPlayer.src = sourceUrl;
+  } else {
+    console.error('Missing source URL parameter');
+  }
+});
 
-            analyser.fftSize = 256;
-            const bufferLength = analyser.frequencyBinCount;
-            const dataArray = new Uint8Array(bufferLength);
-
-            const canvas = document.createElement('canvas');
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-            document.body.appendChild(canvas);
-
-            const ctx = canvas.getContext('2d');
-
-            function draw() {
-                analyser.getByteFrequencyData(dataArray);
-
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-                const barWidth = (canvas.width / bufferLength) * 2.5;
-                let barHeight;
-                let x = 0;
-
-                for (let i = 0; i < bufferLength; i++) {
-                    barHeight = dataArray[i];
-
-                    ctx.fillStyle = 'rgb(' + (barHeight + 100) + ',50,50)';
-                    ctx.fillRect(x, canvas.height - barHeight / 2, barWidth, barHeight / 2);
-
-                    x += barWidth + 1;
-                }
-
-                requestAnimationFrame(draw);
-            }
-
-            draw();
-        }
-    </script>
+  </script>
 </body>
 </html>
