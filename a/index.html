@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ZV-A 1.0</title>
+    <title>ZV-A 1.1</title>
     <link href="https://fonts.googleapis.com/css2?family=Rethink+Sans&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Rethink+Sans:wght@700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
@@ -25,7 +25,7 @@
             display: block;
         }
 
-        video {
+        audio {
             position: absolute;
             top: 0;
             left: 0;
@@ -62,9 +62,9 @@
     </style>
 </head>
 <body>
-    <video id="videoPlayer" no-controls autoplay playsinline>
-        Your browser does not support the video tag.
-    </video>
+    <audio id="audioPlayer" controls autoplay>
+        Your browser does not support the audio tag.
+    </audio>
 
     <!-- Info-shade overlay -->
     <div id="infoShade">
@@ -75,27 +75,28 @@
     <script>
         document.addEventListener("DOMContentLoaded", function () {
             const urlParams = new URLSearchParams(window.location.search);
-            const videoUrl = urlParams.get('video');
+            const audioUrl = urlParams.get('audio');
             const loopParam = urlParams.get('loop');
 
             // Display info-shade overlay
             displayInfoShade(urlParams);
             
-            if (videoUrl) {
-                if (videoUrl.endsWith('.m3u8')) {
-                    playHLSStream(videoUrl);
+            if (audioUrl) {
+                if (audioUrl.endsWith('.m3u8')) {
+                    playHLSStream(audioUrl);
                 } else {
-                    const videoPlayer = document.getElementById('videoPlayer');
-                    videoPlayer.src = videoUrl;
+                    const audioPlayer = document.getElementById('audioPlayer');
+                    audioPlayer.src = audioUrl;
 
                     // Check the loop parameter
                     if (loopParam !== null) {
                         const loopValue = parseInt(loopParam, 10);
-                        videoPlayer.loop = loopValue === 1;
+                        audioPlayer.loop = loopValue === 1;
                     }
 
-                    videoPlayer.addEventListener('loadedmetadata', function () {
-                        videoPlayer.play();
+                    audioPlayer.addEventListener('loadedmetadata', function () {
+                        audioPlayer.play();
+                        createAudioVisualizer(audioPlayer);
                     });
                 }
             }
@@ -121,21 +122,67 @@
         }
 
         function playHLSStream(url) {
-            const videoPlayer = document.getElementById('videoPlayer');
+            const audioPlayer = document.getElementById('audioPlayer');
 
             if (Hls.isSupported()) {
                 const hls = new Hls();
                 hls.loadSource(url);
-                hls.attachMedia(videoPlayer);
+                hls.attachMedia(audioPlayer);
                 hls.on(Hls.Events.MANIFEST_PARSED, function () {
-                    videoPlayer.play();
+                    audioPlayer.play();
+                    createAudioVisualizer(audioPlayer);
                 });
-            } else if (videoPlayer.canPlayType('application/vnd.apple.mpegurl')) {
-                videoPlayer.src = url;
-                videoPlayer.addEventListener('loadedmetadata', function () {
-                    videoPlayer.play();
+            } else if (audioPlayer.canPlayType('application/vnd.apple.mpegurl')) {
+                audioPlayer.src = url;
+                audioPlayer.addEventListener('loadedmetadata', function () {
+                    audioPlayer.play();
+                    createAudioVisualizer(audioPlayer);
                 });
             }
+        }
+
+        function createAudioVisualizer(audioElement) {
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const analyser = audioContext.createAnalyser();
+            const source = audioContext.createMediaElementSource(audioElement);
+
+            source.connect(analyser);
+            analyser.connect(audioContext.destination);
+
+            analyser.fftSize = 256;
+            const bufferLength = analyser.frequencyBinCount;
+            const dataArray = new Uint8Array(bufferLength);
+
+            const canvas = document.createElement('canvas');
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            document.body.appendChild(canvas);
+
+            const ctx = canvas.getContext('2d');
+
+            function draw() {
+                analyser.getByteFrequencyData(dataArray);
+
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                const barWidth = (canvas.width / bufferLength) * 2.5;
+                let barHeight;
+                let x = 0;
+
+                for (let i = 0; i < bufferLength; i++) {
+                    barHeight = dataArray[i];
+
+                    ctx.fillStyle = 'rgb(' + (barHeight + 100) + ',50,50)';
+                    ctx.fillRect(x, canvas.height - barHeight / 2, barWidth, barHeight / 2);
+
+                    x += barWidth + 1;
+                }
+
+                requestAnimationFrame(draw);
+            }
+
+            draw();
         }
     </script>
 </body>
